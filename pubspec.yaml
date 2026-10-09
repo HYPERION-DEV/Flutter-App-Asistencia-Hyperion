@@ -1,0 +1,42 @@
+name: marcador_asistencia
+description: "A new Flutter project."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Lectura de NFC
+  nfc_manager: ^3.3.0
+  # Lectura de QR
+  mobile_scanner: ^5.2.3
+  # Guardado seguro de tokens/sesión
+  flutter_secure_storage: ^11.2.0
+  # Base de datos local para modo offline
+  hive_flutter: ^1.1.0
+  # Manejo de estado
+  provider: ^6.1.2
+
+  # Paquetes requeridos para el marcador
+  geolocator: ^13.0.2
+  local_auth: ^2.3.0
+  http: ^1.2.2
+
+  # Cupertino Icons
+  cupertino_icons: ^1.0.8
+  camera: 0.10.5+9
+  google_mlkit_face_detection: ^0.15.1
+  safe_device: ^1.4.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
