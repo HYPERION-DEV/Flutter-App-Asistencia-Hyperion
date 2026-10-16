@@ -1,66 +1,73 @@
+// lib/services/iso_attendance_service.dart
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:geolocator/geolocator.dart';
-import 'package:local_auth/local_auth.dart';
+import '../config/api_config.dart';
 
 class IsoAttendanceService {
-  static const String baseUrl = 'http://192.168.1.171:3000/api/v1';
-  static final LocalAuthentication _localAuth = LocalAuthentication();
-
-  static Future<bool> marcarConBiometriaISO({
-    required String userId,
-    required String attendanceType,
-    required String signatureBase64,
-  }) async {
-    // 1. Autenticación biométrica local usando la firma estándar compatible de local_auth
-    bool autenticado = false;
+  /// 1. Consulta el estado del ciclo de hoy para habilitar/deshabilitar botones
+  static Future<Map<String, dynamic>> getTodayStatus(String userId) async {
     try {
-      autenticado = await _localAuth.authenticate(
-        localizedReason: 'Confirme su identidad para registrar asistencia',
-        options: const AuthenticationOptions(
-          stickyAuth: true,
-          biometricOnly: true,
-        ),
+      final response = await http.get(
+        Uri.parse('${ApiConfig.baseUrl}/attendance/today?userId=$userId'),
+        headers: {'Content-Type': 'application/json'},
       );
+
+      final isJson = response.headers['content-type']?.contains('application/json') ?? false;
+      if (isJson && response.statusCode == 200) {
+        return {'success': true, 'data': jsonDecode(response.body)};
+      }
+      return {'success': false, 'data': null};
     } catch (e) {
-      // Fallback para versiones de local_auth con parámetros directos
-      autenticado = await _localAuth.authenticate(
-        localizedReason: 'Confirme su identidad para registrar asistencia',
+      return {'success': false, 'data': null};
+    }
+  }
+
+  /// 2. Envío inalterable de la marcación (Garantizando latitud/longitud en String)
+  static Future<Map<String, dynamic>> postAttendance({
+    required String userId,
+    required String type,
+    required String actionType,
+    required double lat,
+    required double lng,
+    String? signature,
+    String? qrContent,
+    String? biometricToken,
+  }) async {
+    try {
+      final url = Uri.parse('${ApiConfig.baseUrl}/attendance');
+
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'userId': userId,
+          'type': type,
+          'actionType': actionType,
+          'lat': lat.toString(), // 👈 Evita errores de tipo numérico en Next.js
+          'lng': lng.toString(),
+          'signature': signature,
+          'qrContent': qrContent,
+          'biometricToken': biometricToken,
+        }),
       );
-    }
 
-    if (!autenticado) {
-      throw Exception('Autenticación biométrica fallida o cancelada.');
-    }
+      final isJson = response.headers['content-type']?.contains('application/json') ?? false;
 
-    String biometricToken = 'HW_SECURE_TOKEN_${DateTime.now().millisecondsSinceEpoch}';
-
-    // 2. Captura de GPS puntual
-    Position pos = await Geolocator.getCurrentPosition(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
-      ),
-    );
-
-    // 3. Envío seguro al backend
-    final response = await http.post(
-      Uri.parse('$baseUrl/attendance'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'userId': userId,
-        'type': attendanceType,
-        'lat': pos.latitude,
-        'lng': pos.longitude,
-        'signature': signatureBase64,
-        'biometricToken': biometricToken,
-      }),
-    );
-
-    if (response.statusCode == 200) {
-      return true;
-    } else {
-      final body = jsonDecode(response.body);
-      throw Exception(body['error'] ?? 'Error registrando marcación.');
+      if (isJson) {
+        final data = jsonDecode(response.body);
+        if (response.statusCode == 200 || response.statusCode == 201) {
+          return {'success': true, 'message': data['message'] ?? 'Marcación registrada con éxito', 'data': data};
+        } else {
+          return {'success': false, 'message': data['error'] ?? 'Error en la solicitud'};
+        }
+      } else {
+        return {
+          'success': false,
+          'message': 'Respuesta no válida del servidor (${response.statusCode}). Verifique la conexión con Next.js.'
+        };
+      }
+    } catch (e) {
+      return {'success': false, 'message': 'Error de conexión o red: ${e.toString().replaceAll('Exception: ', '')}'};
     }
   }
 }

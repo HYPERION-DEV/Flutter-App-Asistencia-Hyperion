@@ -4,11 +4,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 
-import 'screens/attendance_screen.dart';
+import 'config/api_config.dart';
+import 'screens/main_tab_screen.dart';
 import 'services/biometric_service.dart';
+import 'services/notification_service.dart';
+import 'theme/hyperion_colors.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await NotificationService.init();
   runApp(const MyApp());
 }
 
@@ -21,17 +25,25 @@ class MyApp extends StatelessWidget {
       title: 'Hyperion Security - Asistencia',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: HyperionColors.primaryNavy,
+          primary: HyperionColors.primaryNavy,
+          secondary: HyperionColors.cyanAccent,
+        ),
+        scaffoldBackgroundColor: HyperionColors.lightBackground,
         useMaterial3: true,
+        appBarTheme: const AppBarTheme(
+          backgroundColor: HyperionColors.primaryNavy,
+          foregroundColor: Colors.white,
+          elevation: 0,
+          centerTitle: false,
+        ),
       ),
       home: const SplashScreen(),
     );
   }
 }
 
-// -------------------------------------------------------------
-// PANTALLA SPLASH: REVISA SI HAY SESIÓN ALMACENADA EN EL MÓVIL
-// -------------------------------------------------------------
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -74,15 +86,10 @@ class _SplashScreenState extends State<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
-      body: Center(child: CircularProgressIndicator()),
-    );
+    return const Scaffold(body: Center(child: CircularProgressIndicator()));
   }
 }
 
-// -------------------------------------------------------------
-// PANTALLA 1: ENROLAMIENTO POR DNI Y CONTRASEÑA (PRIMERA VEZ)
-// -------------------------------------------------------------
 class DniLoginScreen extends StatefulWidget {
   const DniLoginScreen({super.key});
 
@@ -95,8 +102,6 @@ class _DniLoginScreenState extends State<DniLoginScreen> {
   final _passController = TextEditingController();
   final _storage = const FlutterSecureStorage();
   bool _isLoading = false;
-
-  final String baseUrl = 'http://192.168.1.171:3000/api/v1';
 
   Future<void> _login() async {
     final dni = _dniController.text.trim();
@@ -111,37 +116,42 @@ class _DniLoginScreenState extends State<DniLoginScreen> {
 
     try {
       final response = await http.post(
-        Uri.parse('$baseUrl/auth/login'),
+        Uri.parse('${ApiConfig.baseUrl}/auth/login'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'dni': dni, 'password': password}),
       );
 
-      final resData = jsonDecode(response.body);
+      final isJson = response.headers['content-type']?.contains('application/json') ?? false;
 
-      if (response.statusCode == 200 && resData['success'] == true) {
-        final userId = resData['user']['id'];
-        final userName = resData['user']['name'];
+      if (isJson) {
+        final resData = jsonDecode(response.body);
 
-        // Almacenar credenciales en el chip seguro del Xiaomi
-        await _storage.write(key: 'user_id', value: userId);
-        await _storage.write(key: 'user_name', value: userName);
+        if (response.statusCode == 200 && resData['success'] == true) {
+          final userId = resData['user']['id'];
+          final userName = resData['user']['name'];
 
-        if (!mounted) return;
+          await _storage.write(key: 'user_id', value: userId);
+          await _storage.write(key: 'user_name', value: userName);
 
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => AttendanceScreen(
-              userId: userId,
-              userName: userName,
+          if (!mounted) return;
+
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => MainTabScreen(
+                userId: userId,
+                userName: userName,
+              ),
             ),
-          ),
-        );
+          );
+        } else {
+          _showMessage(resData['error'] ?? 'Credenciales inválidas', Colors.red);
+        }
       } else {
-        _showMessage(resData['error'] ?? 'Credenciales inválidas', Colors.red);
+        _showMessage('Error de servidor (${response.statusCode}). Verifique la IP en ApiConfig.', Colors.red);
       }
     } catch (e) {
-      _showMessage('Error de conexión con el servidor', Colors.red);
+      _showMessage('Error de conexión con la PC: $e', Colors.red);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -164,31 +174,20 @@ class _DniLoginScreenState extends State<DniLoginScreen> {
               children: [
                 Icon(Icons.security, size: 80, color: Colors.indigo.shade800),
                 const SizedBox(height: 16),
-                const Text(
-                  'Ingreso de Trabajador',
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-                ),
+                const Text('Ingreso de Trabajador', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
                 const Text('Enrolar Dispositivo para Asistencia'),
                 const SizedBox(height: 30),
                 TextField(
                   controller: _dniController,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'DNI del Empleado',
-                    prefixIcon: Icon(Icons.badge),
-                    border: OutlineInputBorder(),
-                  ),
+                  decoration: const InputDecoration(labelText: 'DNI del Empleado', prefixIcon: Icon(Icons.badge), border: OutlineInputBorder()),
                 ),
                 const SizedBox(height: 16),
                 TextField(
                   controller: _passController,
                   obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Contraseña',
-                    prefixIcon: Icon(Icons.lock),
-                    border: OutlineInputBorder(),
-                  ),
+                  decoration: const InputDecoration(labelText: 'Contraseña', prefixIcon: Icon(Icons.lock), border: OutlineInputBorder()),
                 ),
                 const SizedBox(height: 24),
                 _isLoading
@@ -211,9 +210,6 @@ class _DniLoginScreenState extends State<DniLoginScreen> {
   }
 }
 
-// -------------------------------------------------------------
-// PANTALLA 2: ACCESO BIOMÉTRICO (RECURRENTE)
-// -------------------------------------------------------------
 class BiometricLoginScreen extends StatefulWidget {
   final String userId;
   final String userName;
@@ -238,7 +234,7 @@ class _BiometricLoginScreenState extends State<BiometricLoginScreen> {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (context) => AttendanceScreen(
+          builder: (context) => MainTabScreen(
             userId: widget.userId,
             userName: widget.userName,
           ),
@@ -267,11 +263,7 @@ class _BiometricLoginScreenState extends State<BiometricLoginScreen> {
             children: [
               Icon(Icons.fingerprint, size: 90, color: Colors.indigo.shade800),
               const SizedBox(height: 20),
-              Text(
-                'Bienvenido, ${widget.userName}',
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              ),
+              Text('Bienvenido, ${widget.userName}', textAlign: TextAlign.center, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
               const SizedBox(height: 10),
               const Text('Confirme su identidad biométrica para continuar'),
               const SizedBox(height: 40),
@@ -286,10 +278,7 @@ class _BiometricLoginScreenState extends State<BiometricLoginScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-              TextButton(
-                onPressed: _desvincular,
-                child: const Text('Cerrar sesión / Cambiar DNI'),
-              ),
+              TextButton(onPressed: _desvincular, child: const Text('Cerrar sesión / Cambiar DNI')),
             ],
           ),
         ),

@@ -9,6 +9,9 @@ android {
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
+        // Habilitar Desugaring de librerías para paquetes como flutter_local_notifications
+        isCoreLibraryDesugaringEnabled = true
+
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -26,6 +29,13 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
+}
+
+// -------------------------------------------------------------
+// DEPENDENCIAS NATIVAS DE ANDROID (DESUGARING)
+// -------------------------------------------------------------
+dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
 }
 
 // -------------------------------------------------------------

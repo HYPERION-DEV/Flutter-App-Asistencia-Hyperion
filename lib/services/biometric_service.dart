@@ -1,3 +1,4 @@
+// lib/services/biometric_service.dart
 import 'package:local_auth/local_auth.dart';
 
 class BiometricService {
@@ -5,7 +6,6 @@ class BiometricService {
 
   static Future<bool> autenticarUsuario() async {
     try {
-      // Verificar si el dispositivo soporta biometría
       bool canCheckBiometrics = await _auth.canCheckBiometrics;
       bool isDeviceSupported = await _auth.isDeviceSupported();
 
@@ -13,12 +13,11 @@ class BiometricService {
         return false;
       }
 
-      // Solicitar la huella / rostro
       return await _auth.authenticate(
-        localizedReason: 'Autentíquese para registrar su asistencia',
+        localizedReason: 'Confirme su identidad biométrica para registrar su asistencia',
         options: const AuthenticationOptions(
-          biometricOnly: true,
-          stickyAuth: true,
+          biometricOnly: true, // Forzar uso estricto de huella/rostro
+          stickyAuth: true,     // Mantiene el diálogo si la app pasa a segundo plano brevemente
         ),
       );
     } catch (e) {

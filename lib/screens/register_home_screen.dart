@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
+import '../config/api_config.dart';
 import '../services/location_service.dart';
 
 class RegisterHomeScreen extends StatefulWidget {
@@ -20,8 +21,6 @@ class _RegisterHomeScreenState extends State<RegisterHomeScreen> {
   Position? _currentPosition;
   bool _isLoadingGps = false;
   bool _isSaving = false;
-
-  final String baseUrl = 'http://192.168.1.171:3000/api/v1';
 
   Future<void> _obtenerUbicacionGPS() async {
     setState(() => _isLoadingGps = true);
@@ -45,28 +44,36 @@ class _RegisterHomeScreenState extends State<RegisterHomeScreen> {
     setState(() => _isSaving = true);
 
     try {
+      final url = Uri.parse('${ApiConfig.baseUrl}/users/home-address');
+
       final response = await http.post(
-        Uri.parse('$baseUrl/users/home-address'),
+        url,
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'userId': widget.userId,
           'alias': _aliasController.text.trim(),
-          'lat': _currentPosition!.latitude,
-          'lng': _currentPosition!.longitude,
-          'addressReference': _addressRefController.text.trim(),
+          'lat': _currentPosition!.latitude.toString(),
+          'lng': _currentPosition!.longitude.toString(),
+          'address': _addressRefController.text.trim(),
         }),
       );
 
-      final resData = jsonDecode(response.body);
+      final isJson = response.headers['content-type']?.contains('application/json') ?? false;
 
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        _mostrarSnackBar('¡Domicilio registrado correctamente para Home Office!', Colors.green);
-        if (mounted) Navigator.pop(context);
+      if (isJson) {
+        final resData = jsonDecode(response.body);
+
+        if (response.statusCode == 200 || response.statusCode == 201) {
+          _mostrarSnackBar('¡Domicilio registrado correctamente para Home Office!', Colors.green);
+          if (mounted) Navigator.pop(context);
+        } else {
+          _mostrarSnackBar(resData['error'] ?? 'Error al registrar el domicilio', Colors.red);
+        }
       } else {
-        _mostrarSnackBar(resData['error'] ?? 'Error al registrar el domicilio', Colors.red);
+        _mostrarSnackBar('Error del servidor (${response.statusCode}). Verifique la conexión.', Colors.red);
       }
     } catch (e) {
-      _mostrarSnackBar('Error de conexión con el servidor', Colors.red);
+      _mostrarSnackBar('Error de conexión con el servidor: $e', Colors.red);
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -129,7 +136,6 @@ class _RegisterHomeScreenState extends State<RegisterHomeScreen> {
             ),
             const SizedBox(height: 24),
 
-            // Tarjeta de Estado del GPS
             Card(
               color: Colors.grey.shade100,
               child: Padding(

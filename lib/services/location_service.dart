@@ -3,37 +3,37 @@ import 'package:geolocator/geolocator.dart';
 import 'package:safe_device/safe_device.dart';
 
 class LocationService {
-  /// Obtiene la posición GPS real actual del dispositivo
   static Future<Position> obtenerUbicacionActual() async {
-    // 1. Protección Anti-Fraud: Detectar si el usuario simula el GPS
+    // 1. Anti-Fraud: Detectar aplicaciones de Fake GPS / Mock Location
     bool isMockLocation = await SafeDevice.isMockLocation;
     if (isMockLocation) {
-      throw Exception('Se detectó el uso de GPS Falso / Mock Location. Desactive las aplicaciones de simulación para marcar.');
+      throw Exception('Se detectó simulación de ubicación (Fake GPS). Desactive estas apps para continuar.');
     }
 
-    // 2. Verificar que el sensor GPS esté encendido
+    // 2. Verificar que el sensor GPS físico esté encendido
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
-      throw Exception('El GPS está desactivado. Por favor, actívelo en las configuraciones de su teléfono.');
+      throw Exception('El GPS está desactivado. Actívelo en la barra de notificaciones.');
     }
 
-    // 3. Verificar y solicitar permisos de ubicación
+    // 3. Permisos de Ubicación
     LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
-        throw Exception('Se requieren permisos de ubicación para validar su marcación.');
+        throw Exception('Se requiere permiso de ubicación para registrar su marcación.');
       }
     }
 
     if (permission == LocationPermission.deniedForever) {
-      throw Exception('Los permisos de GPS están denegados permanentemente. Habilítelos desde los Ajustes del dispositivo.');
+      throw Exception('Permiso de GPS denegado permanentemente. Actívelo desde los Ajustes del sistema.');
     }
 
-    // 4. Retornar las coordenadas actuales con alta precisión
+    // 4. Obtención de Coordenadas Físicas Frescas con Tiempo Límite de 10 Segundos
     return await Geolocator.getCurrentPosition(
       locationSettings: const LocationSettings(
         accuracy: LocationAccuracy.high,
+        timeLimit: Duration(seconds: 10), // 👈 Previene que la app se quede congelada si el satélite no engancha
       ),
     );
   }
